@@ -15,8 +15,39 @@
         Lista de Pedidos
       </v-card-title>
 
+      <!-- Filtro de Clientes -->
+      <v-card-text class="pb-0 mt-4">
+        <v-row>
+          <v-col cols="12" md="4">
+            <v-select v-model="selectedClientFilter" :items="clientFilterOptions" item-title="name" item-value="id"
+              label="Filtrar por cliente" prepend-icon="mdi-account-filter" clearable variant="outlined"
+              density="compact" @update:model-value="filterOrders">
+              <template v-slot:prepend-item>
+                <v-list-item title="Todos os clientes" :active="selectedClientFilter === null"
+                  @click="clearClientFilter">
+                  <template v-slot:prepend>
+                    <v-icon>mdi-account-multiple</v-icon>
+                  </template>
+                </v-list-item>
+                <v-divider></v-divider>
+              </template>
+            </v-select>
+          </v-col>
+          <v-col cols="12" md="8" class="d-flex align-center">
+            <v-chip v-if="selectedClientFilter" color="primary" variant="outlined" closable
+              @click:close="clearClientFilter">
+              <v-icon start>mdi-filter</v-icon>
+              {{ getSelectedClientName() }}
+            </v-chip>
+            <span v-if="filteredOrders.length !== orders.length" class="text-caption ml-2">
+              Mostrando {{ filteredOrders.length }} de {{ orders.length }} pedidos
+            </span>
+          </v-col>
+        </v-row>
+      </v-card-text>
+
       <v-card-text>
-        <OrdersList :orders="orders" :loading="loading" @view-items="viewOrderItems" @edit="editOrder"
+        <OrdersList :orders="filteredOrders" :loading="loading" @view-items="viewOrderItems" @edit="editOrder"
           @delete="deleteOrder" />
       </v-card-text>
     </v-card>
@@ -58,6 +89,10 @@ const products = ref<Product[]>([])
 const loading = ref(false)
 const saving = ref(false)
 
+// Filtro de clientes
+const selectedClientFilter = ref<number | null>(null)
+const filteredOrders = ref<Order[]>([])
+
 // Dialogs
 const orderDialog = ref(false)
 const itemsDialog = ref(false)
@@ -68,7 +103,36 @@ const editingOrder = ref<Order | null>(null)
 const editingItem = ref<OrderItem | null>(null)
 const selectedOrder = ref<Order | null>(null)
 
+// Computed properties para o filtro
+const clientFilterOptions = computed(() => {
+  return clients.value.map(client => ({
+    id: client.id,
+    name: client.name
+  }))
+})
+
 // Methods
+const filterOrders = () => {
+  if (selectedClientFilter.value === null) {
+    filteredOrders.value = [...orders.value]
+  } else {
+    filteredOrders.value = orders.value.filter(order =>
+      order.customer?.id === selectedClientFilter.value
+    )
+  }
+}
+
+const clearClientFilter = () => {
+  selectedClientFilter.value = null
+  filterOrders()
+}
+
+const getSelectedClientName = () => {
+  if (!selectedClientFilter.value) return ''
+  const client = clients.value.find(c => c.id === selectedClientFilter.value)
+  return client?.name || ''
+}
+
 const loadData = async () => {
   if (loading.value) return
 
@@ -85,17 +149,16 @@ const loadData = async () => {
     clients.value = clientsData || []
     products.value = productsData || []
 
-    console.log('Dados carregados:', {
-      orders: orders.value.length,
-      clients: clients.value.length,
-      products: products.value.length
-    })
+    // Aplicar filtro após carregar os dados
+    filterOrders()
+
   } catch (error) {
     console.error('Erro ao carregar dados:', error)
     showError('Erro ao carregar dados', 'Não foi possível carregar os dados necessários')
     orders.value = []
     clients.value = []
     products.value = []
+    filteredOrders.value = []
   } finally {
     loading.value = false
   }
